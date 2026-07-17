@@ -10,7 +10,7 @@ The server computes the totals from all hospitals and uses them for deriving two
 
 I did this in order to see if the same outcome would be achieved by the calculation of the measurements from a combined patient-level dataset. But this is expected, provided that all the hospitals use the same predetermined probability ranges.
 
-In the demo, I created four fake hospitals which exhibit different patterns of behavior. They have different numbers of patients, different outcome rates, different sizes of demographic groups, and different calibration patterns. With the included random seed, the largest difference between federated and pooled results was 3.47e-17. As such, the difference is virtually zero. The negligible difference is a result of the way computer programs round off decimal numbers.
+In the demo, I created four fake hospitals which exhibit different patterns of behavior. They have different numbers of patients, different outcome rates, different sizes of demographic groups, and different calibration patterns. Depending on the Python and NumPy versions, the final floating-point difference may vary slightly, but it remained below 1e-16 in the tested environments.. As such, the difference is virtually zero. The negligible difference is a result of the way computer programs round off decimal numbers.
 
 ## Restrictions
 
