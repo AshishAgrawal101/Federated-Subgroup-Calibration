@@ -91,10 +91,10 @@ def main():
     print("bias. Bin count is not a neutral choice.\n")
 
     floor = next(r for r in size_rows if r["n"] == 250)
-    print("Reading for the thyroid case: a subgroup of roughly 250 patients still")
-    print(f"shows a spurious ECE of about {floor['mean_ece']:.3f} even when the model")
-    print("is flawless. Any measured subgroup ECE below that is indistinguishable")
-    print("from perfect calibration.")
+    print("For a subgroup of roughly 250 patients, a perfectly calibrated model")
+    print(f"produced a mean measured ECE of about {floor['mean_ece']:.3f}.")
+    print("In these trials, the 5th-95th percentile range was")
+    print(f"{floor['p05']:.3f} to {floor['p95']:.3f}.")
 
     with open("reliability_results.json", "w") as handle:
         json.dump(
