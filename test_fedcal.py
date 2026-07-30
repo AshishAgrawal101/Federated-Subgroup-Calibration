@@ -1,9 +1,11 @@
 """Tests for the first calibration prototype."""
 
+import json
 import unittest
 
 import numpy as np
 
+from appfl_adapter import aggregate_action_payloads, make_action_payload
 from fedcal import (
     compute_client_report,
     merge_reports,
@@ -67,6 +69,47 @@ class FedCalTests(unittest.TestCase):
         self.assertLessEqual(occupied_cells, 20)
         self.assertFalse(hasattr(report, "y_prob"))
         self.assertFalse(hasattr(report, "y_true"))
+
+    def test_action_payload_round_trip_matches_pooled(self):
+        sites = make_sites(seed=5)
+        payloads = [
+            json.loads(
+                json.dumps(
+                    make_action_payload(
+                        compute_client_report(f"hospital_{i}", *site)
+                    )
+                )
+            )
+            for i, site in enumerate(sites)
+        ]
+        federated = aggregate_action_payloads(payloads)
+        pooled = pooled_subgroup_metrics(
+            np.concatenate([site[0] for site in sites]),
+            np.concatenate([site[1] for site in sites]),
+            np.concatenate([site[2] for site in sites]),
+        )
+
+        for group in pooled:
+            self.assertEqual(federated[group]["n"], pooled[group]["n"])
+            self.assertAlmostEqual(federated[group]["ece"], pooled[group]["ece"], 12)
+            self.assertAlmostEqual(
+                federated[group]["brier"], pooled[group]["brier"], 12
+            )
+
+    def test_action_payload_schema_is_checked(self):
+        report = compute_client_report("site", [0.2, 0.8], [0, 1], ["F", "M"])
+        payload = make_action_payload(report)
+        self.assertTrue(all(type(group) is str for group in payload["cells"]))
+        self.assertTrue(
+            all(
+                type(bin_number) is str
+                for bins in payload["cells"].values()
+                for bin_number in bins
+            )
+        )
+        payload["schema_version"] = 999
+        with self.assertRaises(ValueError):
+            aggregate_action_payloads([payload])
 
     def test_mismatched_bins_are_rejected(self):
         rng = np.random.default_rng(3)
