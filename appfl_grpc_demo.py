@@ -1,4 +1,4 @@
-"""Send calibration reports through APPFL's real gRPC custom-action API."""
+"""APPFL gRPC calibration demo."""
 
 import logging
 import threading
@@ -32,7 +32,7 @@ from fedcal import compute_client_report, pooled_subgroup_metrics
 
 
 class CalibrationServerAgent(ServerAgent):
-    """Minimal APPFL server agent for evaluation-only custom actions."""
+    """Minimal evaluation server."""
 
     def __init__(self, num_clients):
         self.server_agent_config = OmegaConf.create({"server_configs": {}})
@@ -40,7 +40,7 @@ class CalibrationServerAgent(ServerAgent):
 
 
 class CalibrationServerCommunicator(GRPCServerCommunicator):
-    """APPFL gRPC communicator with one subgroup-calibration action."""
+    """Handle calibration requests."""
 
     def __init__(self, server_agent, **kwargs):
         super().__init__(server_agent, **kwargs)

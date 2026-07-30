@@ -1,16 +1,4 @@
-"""When is a federated subgroup calibration estimate actually trustworthy?
-
-The federated aggregation in fedcal.py reproduces the pooled ECE exactly. That
-says nothing about whether the pooled ECE is itself a reliable number when a
-demographic subgroup is small.
-
-This script measures that. It builds a model that is perfectly calibrated by
-construction -- outcomes are drawn with exactly the predicted probability, so
-the true ECE is zero -- and then asks what ECE we actually measure at different
-subgroup sizes. Any value above zero is pure small-sample bias.
-
-Run:  python reliability_experiment.py
-"""
+"""Measure small-sample ECE bias."""
 
 import json
 import math
@@ -26,7 +14,7 @@ BIN_COUNTS = [5, 10, 20, 50]
 
 
 def measure_ece(rng, n, n_bins):
-    """One trial: perfectly calibrated model, measured through the federated path."""
+    """Measure one calibrated sample."""
     p = rng.uniform(0.0, 1.0, n)
     y = (rng.random(n) < p).astype(float)
     groups = np.full(n, "G")
@@ -59,7 +47,7 @@ def bias_by_bins(rng, n=200):
 
 
 def fit_power_law(rows):
-    """Bias should fall off like n**(-0.5) if it is ordinary sampling noise."""
+    """Fit bias against sample size."""
     n = np.array([r["n"] for r in rows], dtype=float)
     ece = np.array([r["mean_ece"] for r in rows], dtype=float)
     slope, intercept = np.polyfit(np.log(n), np.log(ece), 1)
@@ -67,21 +55,7 @@ def fit_power_law(rows):
 
 
 def predicted_floor(n, n_bins):
-    """Closed-form estimate of the ECE a perfectly calibrated model will show.
-
-    Within a bin holding n_b patients, the observed outcome rate differs from
-    the predicted rate by sampling noise with standard deviation
-    sqrt(p(1-p)/n_b). The expected absolute value of a mean-zero normal
-    deviation is sqrt(2/pi) times its standard deviation. Weighting each bin by
-    n_b/n and assuming predictions spread evenly over [0, 1], where the average
-    of sqrt(p(1-p)) is pi/8, this collapses to
-
-        bias  ~  sqrt(2/pi) * (pi/8) * sqrt(n_bins / n)
-
-    The sqrt(n_bins / n) scaling is general. The leading constant assumes the
-    uniform prediction spread used here; a cohort whose predictions cluster near
-    zero, as in a rare-event setting, has a smaller constant.
-    """
+    """Estimate ECE bias for uniform predictions."""
     return math.sqrt(2.0 / math.pi) * (math.pi / 8.0) * math.sqrt(n_bins / n)
 
 

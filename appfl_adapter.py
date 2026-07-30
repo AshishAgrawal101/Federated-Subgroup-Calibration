@@ -1,4 +1,4 @@
-"""JSON-safe messages for an APPFL custom action."""
+"""APPFL payload helpers."""
 
 from fedcal import CellStats, ClientReport, merge_reports, subgroup_metrics
 
@@ -11,7 +11,7 @@ _CELL_KEYS = {"n", "sum_p", "sum_y", "sum_sq_err"}
 
 
 def make_action_payload(report):
-    """Convert one validated client report into JSON-safe values."""
+    """Build a serializable report."""
 
     merge_reports([report])
     return {
@@ -34,7 +34,7 @@ def make_action_payload(report):
 
 
 def parse_action_payload(payload):
-    """Reconstruct and validate a client report received by the server."""
+    """Parse and validate a report."""
 
     if not isinstance(payload, dict) or set(payload) != _REPORT_KEYS:
         raise ValueError("invalid calibration report payload")
@@ -72,7 +72,7 @@ def parse_action_payload(payload):
 
 
 def aggregate_action_payloads(payloads, min_n_warn=50):
-    """Aggregate client payloads as an APPFL server action would."""
+    """Aggregate client reports."""
 
     reports = [parse_action_payload(payload) for payload in payloads]
     return subgroup_metrics(merge_reports(reports), min_n_warn=min_n_warn)
