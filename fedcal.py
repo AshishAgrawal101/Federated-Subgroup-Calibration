@@ -50,7 +50,7 @@ def _check_arrays(y_prob, y_true, groups):
         y_true = np.asarray(y_true, dtype=float)
     except (TypeError, ValueError) as error:
         raise ValueError("predictions and outcomes must be numeric") from error
-    groups = np.asarray(groups, dtype=object)
+    groups = np.asarray(groups)
 
     if y_prob.ndim != 1 or y_true.ndim != 1 or groups.ndim != 1:
         raise ValueError("predictions, outcomes, and groups must be one-dimensional")
@@ -65,18 +65,46 @@ def _check_arrays(y_prob, y_true, groups):
     if not np.all(np.isfinite(y_true)) or not np.all(np.isin(y_true, [0, 1])):
         raise ValueError("outcomes must contain only 0 and 1")
 
-    clean_groups = []
-    for value in groups.tolist():
-        if value is None:
+    if groups.dtype.kind == "U":
+        clean_groups = np.char.strip(groups)
+    elif groups.dtype.kind in "iufb":
+        if groups.dtype.kind == "f" and not np.all(np.isfinite(groups)):
             raise ValueError("group labels cannot be missing")
-        if isinstance(value, (float, np.floating)) and not np.isfinite(value):
-            raise ValueError("group labels cannot be missing")
-        label = str(value).strip()
-        if not label:
-            raise ValueError("group labels cannot be empty")
-        clean_groups.append(label)
+        clean_groups = np.char.strip(groups.astype(str))
+    else:
+        clean_groups = []
+        for value in groups.tolist():
+            if value is None:
+                raise ValueError("group labels cannot be missing")
+            if isinstance(value, (float, np.floating)) and not np.isfinite(value):
+                raise ValueError("group labels cannot be missing")
+            clean_groups.append(str(value).strip())
+        clean_groups = np.asarray(clean_groups, dtype=str)
 
-    return y_prob, y_true, np.asarray(clean_groups, dtype=str)
+    if np.any(clean_groups == ""):
+        raise ValueError("group labels cannot be empty")
+    return y_prob, y_true, clean_groups
+
+
+def _cell_totals(y_prob, y_true, groups, n_bins):
+    """Build all group-bin totals."""
+
+    bin_index = np.minimum((y_prob * n_bins).astype(int), n_bins - 1)
+    group_names, group_index = np.unique(groups, return_inverse=True)
+    flat_index = group_index * n_bins + bin_index
+    n_cells = len(group_names) * n_bins
+    shape = (len(group_names), n_bins)
+
+    counts = np.bincount(flat_index, minlength=n_cells).reshape(shape)
+    sum_p = np.bincount(flat_index, weights=y_prob, minlength=n_cells).reshape(shape)
+    sum_y = np.bincount(flat_index, weights=y_true, minlength=n_cells).reshape(shape)
+    squared_error = (y_prob - y_true) ** 2
+    sum_sq_err = np.bincount(
+        flat_index,
+        weights=squared_error,
+        minlength=n_cells,
+    ).reshape(shape)
+    return group_names, counts, sum_p, sum_y, sum_sq_err
 
 
 def compute_client_report(
@@ -91,22 +119,25 @@ def compute_client_report(
     client_id = _check_client_id(client_id)
     n_bins = _check_n_bins(n_bins)
     y_prob, y_true, groups = _check_arrays(y_prob, y_true, groups)
-    bin_index = np.minimum((y_prob * n_bins).astype(int), n_bins - 1)
+    group_names, counts, sum_p, sum_y, sum_sq_err = _cell_totals(
+        y_prob,
+        y_true,
+        groups,
+        n_bins,
+    )
 
     report = ClientReport(client_id=client_id, n_bins=n_bins)
-    for group in np.unique(groups):
-        group_mask = groups == group
-        report.cells[group] = {}
-        for bin_number in np.unique(bin_index[group_mask]):
-            mask = group_mask & (bin_index == bin_number)
-            p = y_prob[mask]
-            y = y_true[mask]
-            report.cells[group][int(bin_number)] = CellStats(
-                n=int(mask.sum()),
-                sum_p=float(p.sum()),
-                sum_y=float(y.sum()),
-                sum_sq_err=float(((p - y) ** 2).sum()),
+    for group_number, group in enumerate(group_names):
+        occupied = np.flatnonzero(counts[group_number])
+        report.cells[str(group)] = {
+            int(bin_number): CellStats(
+                n=int(counts[group_number, bin_number]),
+                sum_p=float(sum_p[group_number, bin_number]),
+                sum_y=float(sum_y[group_number, bin_number]),
+                sum_sq_err=float(sum_sq_err[group_number, bin_number]),
             )
+            for bin_number in occupied
+        }
     return report
 
 
@@ -201,23 +232,25 @@ def pooled_subgroup_metrics(
 
     n_bins = _check_n_bins(n_bins)
     y_prob, y_true, groups = _check_arrays(y_prob, y_true, groups)
-    bin_index = np.minimum((y_prob * n_bins).astype(int), n_bins - 1)
+    group_names, counts, sum_p, sum_y, sum_sq_err = _cell_totals(
+        y_prob,
+        y_true,
+        groups,
+        n_bins,
+    )
 
     result = {}
-    for group in np.unique(groups):
-        group_mask = groups == group
-        p = y_prob[group_mask]
-        y = y_true[group_mask]
-        bins = bin_index[group_mask]
-        group_n = int(group_mask.sum())
-        ece = 0.0
-        for bin_number in np.unique(bins):
-            mask = bins == bin_number
-            ece += (mask.sum() / group_n) * abs(p[mask].mean() - y[mask].mean())
-        result[group] = {
+    for group_number, group in enumerate(group_names):
+        group_counts = counts[group_number]
+        occupied = group_counts > 0
+        group_n = int(group_counts.sum())
+        mean_p = sum_p[group_number, occupied] / group_counts[occupied]
+        mean_y = sum_y[group_number, occupied] / group_counts[occupied]
+        ece = np.sum((group_counts[occupied] / group_n) * np.abs(mean_p - mean_y))
+        result[str(group)] = {
             "n": group_n,
             "ece": float(ece),
-            "brier": float(((p - y) ** 2).mean()),
+            "brier": float(sum_sq_err[group_number].sum() / group_n),
         }
     return result
 

@@ -70,6 +70,33 @@ class FedCalTests(unittest.TestCase):
         self.assertFalse(hasattr(report, "y_prob"))
         self.assertFalse(hasattr(report, "y_true"))
 
+    def test_report_cells_match_direct_sums(self):
+        rng = np.random.default_rng(22)
+        probability = rng.random(5_000)
+        outcome = (rng.random(5_000) < probability).astype(float)
+        group = rng.choice(["A", "B", "C", "D", "E"], size=5_000)
+        n_bins = 37
+        report = compute_client_report(
+            "site",
+            probability,
+            outcome,
+            group,
+            n_bins=n_bins,
+        )
+        bin_index = np.minimum((probability * n_bins).astype(int), n_bins - 1)
+
+        for group_name, bins in report.cells.items():
+            for bin_number, cell in bins.items():
+                mask = (group == group_name) & (bin_index == bin_number)
+                self.assertEqual(cell.n, int(mask.sum()))
+                self.assertAlmostEqual(cell.sum_p, float(probability[mask].sum()), 12)
+                self.assertAlmostEqual(cell.sum_y, float(outcome[mask].sum()), 12)
+                self.assertAlmostEqual(
+                    cell.sum_sq_err,
+                    float(((probability[mask] - outcome[mask]) ** 2).sum()),
+                    12,
+                )
+
     def test_action_payload_round_trip_matches_pooled(self):
         sites = make_sites(seed=5)
         payloads = [
@@ -124,6 +151,22 @@ class FedCalTests(unittest.TestCase):
     def test_nan_probability_is_rejected(self):
         with self.assertRaises(ValueError):
             compute_client_report("a", [np.nan], [1], ["F"])
+
+    def test_group_labels_are_cleaned(self):
+        report = compute_client_report(
+            "site",
+            [0.2, 0.8],
+            [0, 1],
+            [" F ", "F"],
+        )
+        self.assertEqual(set(report.cells), {"F"})
+        self.assertEqual(sum(cell.n for cell in report.cells["F"].values()), 2)
+
+    def test_missing_group_is_rejected(self):
+        with self.assertRaises(ValueError):
+            compute_client_report("site", [0.5], [1], [None])
+        with self.assertRaises(ValueError):
+            compute_client_report("site", [0.5], [1], [np.nan])
 
     def test_nonbinary_outcome_is_rejected(self):
         with self.assertRaises(ValueError):
