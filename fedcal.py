@@ -1,4 +1,4 @@
-"""Small prototype for federated subgroup calibration evaluation."""
+"""Federated subgroup calibration."""
 
 from dataclasses import dataclass, field
 from numbers import Integral
@@ -86,7 +86,7 @@ def compute_client_report(
     groups,
     n_bins=DEFAULT_N_BINS,
 ):
-    """Convert one hospital's predictions into group/bin totals."""
+    """Summarize one hospital."""
 
     client_id = _check_client_id(client_id)
     n_bins = _check_n_bins(n_bins)
@@ -131,7 +131,7 @@ def _check_cell(group, bin_number, cell, n_bins):
 
 
 def merge_reports(reports):
-    """Validate and add reports from several hospitals."""
+    """Validate and merge reports."""
 
     if not reports:
         raise ValueError("no reports to merge")
@@ -164,7 +164,7 @@ def merge_reports(reports):
 
 
 def subgroup_metrics(merged, min_n_warn=50):
-    """Calculate ECE and Brier score from merged cells."""
+    """Calculate subgroup metrics."""
 
     if not isinstance(min_n_warn, Integral) or isinstance(min_n_warn, bool):
         raise ValueError("min_n_warn must be a positive integer")
@@ -197,7 +197,7 @@ def pooled_subgroup_metrics(
     groups,
     n_bins=DEFAULT_N_BINS,
 ):
-    """Reference calculation used to test the federated result."""
+    """Calculate pooled metrics."""
 
     n_bins = _check_n_bins(n_bins)
     y_prob, y_true, groups = _check_arrays(y_prob, y_true, groups)
@@ -229,7 +229,7 @@ def simulate_hospital(
     group_probs=None,
     miscalibration=None,
 ):
-    """Generate a synthetic hospital cohort for testing."""
+    """Generate a test hospital."""
 
     if not isinstance(rng, np.random.Generator):
         raise ValueError("rng must be a numpy random generator")

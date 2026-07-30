@@ -1,4 +1,4 @@
-"""Run the prototype on four synthetic hospitals."""
+"""Run the four-hospital demo."""
 
 import numpy as np
 
@@ -11,7 +11,7 @@ from fedcal import (
 
 
 def make_demo_sites(seed=42):
-    """Create the four synthetic hospital cohorts used in both demos."""
+    """Create the demo hospitals."""
 
     rng = np.random.default_rng(seed)
     return {

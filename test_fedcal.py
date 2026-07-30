@@ -1,4 +1,4 @@
-"""Tests for the first calibration prototype."""
+"""Calibration tests."""
 
 import json
 import unittest
